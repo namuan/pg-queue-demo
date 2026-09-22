@@ -2,37 +2,9 @@
 
 A small PostgreSQL-backed work queue using Node.js and Podman. It demonstrates concurrent consumers, `FOR UPDATE SKIP LOCKED`, retries, leases, and recovery after a worker stops.
 
-```mermaid
-flowchart LR
-  subgraph Podman[Podman Compose]
-    Producer[Producer]
-    Database[(PostgreSQL)]
-    WorkerA[Worker 1]
-    WorkerB[Worker 2]
-    WorkerC[Worker 3]
-    Monitor[Monitor dashboard]
-  end
+![Animated PostgreSQL queue flow](assets/queue-flow.gif)
 
-  Producer -->|INSERT pending job| Database
-  WorkerA -->|Claim with SKIP LOCKED| Database
-  WorkerB -->|Claim with SKIP LOCKED| Database
-  WorkerC -->|Claim with SKIP LOCKED| Database
-  Database -->|Process payload| WorkerA
-  Database -->|Process payload| WorkerB
-  Database -->|Process payload| WorkerC
-  WorkerA -->|completed, retry, or failed| Database
-  WorkerB -->|completed, retry, or failed| Database
-  WorkerC -->|completed, retry, or failed| Database
-  WorkerA -.->|Heartbeat and current job| Monitor
-  WorkerB -.->|Heartbeat and current job| Monitor
-  WorkerC -.->|Heartbeat and current job| Monitor
-  Monitor -->|Queue data and worker health| Browser[Browser or Prometheus]
-
-  Database --- Jobs[(jobs table)]
-  Database --- Workers[(workers table)]
-```
-
-Each worker claims one available row in a short transaction, processes it outside that transaction, and updates the result using its lease token. Heartbeats make worker health and current activity visible to the monitor.
+The producer enqueues jobs in PostgreSQL. Workers claim jobs with `SKIP LOCKED`, process them, then save the completed or retry status. The dashboard displays queue and worker health.
 
 ## Requirements
 
