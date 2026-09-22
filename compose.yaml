@@ -1,0 +1,74 @@
+name: pg-queue-demo
+
+services:
+  db:
+    image: docker.io/library/postgres:16
+    environment:
+      POSTGRES_DB: queue_demo
+      POSTGRES_USER: queue
+      POSTGRES_PASSWORD: queue
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_queue_data:/var/lib/postgresql/data
+      - ./db/init.sql:/docker-entrypoint-initdb.d/001-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U queue -d queue_demo"]
+      interval: 2s
+      timeout: 5s
+      retries: 15
+
+  monitor:
+    build:
+      context: .
+      dockerfile: Containerfile
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGHOST: db
+      PGPORT: 5432
+      PGDATABASE: queue_demo
+      PGUSER: queue
+      PGPASSWORD: queue
+      MONITOR_PORT: 8090
+    command: ["npm", "run", "monitor"]
+    ports:
+      - "8090:8090"
+
+  worker:
+    build:
+      context: .
+      dockerfile: Containerfile
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGHOST: db
+      PGPORT: 5432
+      PGDATABASE: queue_demo
+      PGUSER: queue
+      PGPASSWORD: queue
+      QUEUE_LEASE_MS: 30000
+      QUEUE_POLL_MS: 500
+      JOB_WORK_MS: 1000
+      WORKER_HEARTBEAT_MS: 2000
+    command: ["npm", "run", "worker"]
+
+  producer:
+    build:
+      context: .
+      dockerfile: Containerfile
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGHOST: db
+      PGPORT: 5432
+      PGDATABASE: queue_demo
+      PGUSER: queue
+      PGPASSWORD: queue
+    command: ["node", "src/producer.js", "--count=20"]
+
+volumes:
+  pg_queue_data:
